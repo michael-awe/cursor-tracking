@@ -2,6 +2,17 @@ import json
 import cv2
 import os
 
+def load_templates():
+
+    template_paths = os.listdir('templates')
+    templates = []
+    for path in template_paths:
+        template = cv2.imread(f"templates/{path}", 0)
+        if template is not None:
+            templates.append(template)
+
+    return templates
+
 def vid_to_frames(filename, FPS=30):
     frame_map = {}
     try:
@@ -15,7 +26,9 @@ def vid_to_frames(filename, FPS=30):
     # Open the video file
     video = cv2.VideoCapture(filename)
     # Get the frames per second (fps) of the video
-    fps = video.get(cv2.CAP_PROP_FPS)
+    # fps = video.get(cv2.CAP_PROP_FPS)
+    fps = 5
+
 
     # Create a counter to name the frames
     frame_count = 0
@@ -77,43 +90,53 @@ def process_frames(frames):
         json.dump(processed_frames, f, indent=4)
 
     print("PROCESSED IMAGES SAVED TO processed_frames FOLDER")
-    
+
 def find_cursor(image_path):
-    try:
     
-        # Load the image
-        image = cv2.imread(image_path)
+    templates = load_templates()
+    template_paths = os.listdir('templates')
 
-        # Convert to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    best_match_val = -1
+    best_match_loc = None
+    best_template_path = None
 
-        # Load the cursor template
-        cursor_template = cv2.imread('cursor.png', 0)
+    try:
+        for cursor_template, template_path in zip(templates, template_paths):
 
-        # Perform template matching
-        res = cv2.matchTemplate(gray, cursor_template, cv2.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+            # Load the image
+            image = cv2.imread(image_path)
 
-        # Get the cursor coordinates
-        cursor_x, cursor_y = max_loc
+            # Convert to grayscale
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        #Draw a rectangle around the cursor
-        cv2.rectangle(image, max_loc, (max_loc[0] + cursor_template.shape[1], max_loc[1] + cursor_template.shape[0]), (0, 0, 255), 2)
+            # Perform template matching
+            res = cv2.matchTemplate(gray, cursor_template, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+
+            # Check if the current match is better than the previous best match
+            if max_val > best_match_val:
+                best_match_val = max_val
+                cursor_x, cursor_y = max_loc
+                best_path = template_path
+
+            if best_match_val < 0.7:
+                print("No cursor found")
+                return None, None
+            #Draw a rectangle around the cursor
+            cv2.rectangle(image, max_loc, (max_loc[0] + cursor_template.shape[1], max_loc[1] + cursor_template.shape[0]), (0, 0, 255), 2)
+            
+            #save image to folder
+            filename = image_path.split('/')[-1]
+            cv2.imwrite(f'processed_frames/{filename}', image)
         
-        #save image to folder
-        filename = image_path.split('/')[-1]
-        cv2.imwrite(f'processed_frames/{filename}', image)
-
-
-        return cursor_x, cursor_y
     except Exception as e:
         return None, None
-    
 
-    # Display the image with the cursor marked
-    # cv2.startWindowThread()
-    # cv2.namedWindow("preview")
-    # cv2.imshow("preview", image)
+    # print(f"Confidence: {best_match_val}")
+    # print(f"Template: {best_path}")
+    # print(f"Cursor position: {cursor_x}, {cursor_y})")
+    
+    return None, None
 
     
 def main():
